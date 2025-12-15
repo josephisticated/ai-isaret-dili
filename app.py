@@ -14,7 +14,6 @@ import zipfile
 import sys
 from tkinter import filedialog, messagebox
 from sklearn.model_selection import train_test_split
-import pygame # For audio
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
@@ -123,16 +122,17 @@ class SignLanguageApp(ctk.CTk):
         self.show_train_warning = True
         self.unsaved_changes = False
         
-        # Easter Egg
-        self.media_path = "media"
-        if not os.path.exists(self.media_path):
-            os.makedirs(self.media_path)
-        self.is_paused = False
         
         # Audio Init
-        pygame.mixer.init()
         
         
+        
+        
+        # Thread Safety
+        self.current_frame_pil = None
+        self.ui_lock = threading.Lock()
+        
+        # Countdown state
         # Countdown state
         self.countdown_active = False
         self.countdown_value = 0
@@ -147,6 +147,9 @@ class SignLanguageApp(ctk.CTk):
         # Start Video Loop
         self.video_thread = threading.Thread(target=self._video_loop, daemon=True)
         self.video_thread.start()
+        
+        # Start UI Update Loop (Main Thread)
+        self._update_video_ui()
         
         # Bind click to reset focus, but ONLY if not clicking an entry/button
         self.bind("<Button-1>", self._on_global_click)
@@ -319,8 +322,7 @@ class SignLanguageApp(ctk.CTk):
         params = [
             ("Epochs:", config.EPOCHS, "Eğitim döngüsü sayısı. Ne kadar süreceğini belirler."),
             ("Dropout:", "0.2", "Unutma oranı (0.1-0.5). Ezberlemeyi önler."),
-            ("Units:", "64", "Nöron sayısı. Karmaşıklığı artırır."),
-            ("LR:", "0.001", "Öğrenme hızı. Küçük değerler daha hassas öğrenir.")
+            ("LR:", "0.0001", "Öğrenme hızı. Küçük değerler daha hassas öğrenir.")
         ]
         
         self.hp_entries = {}
@@ -336,7 +338,6 @@ class SignLanguageApp(ctk.CTk):
 
         self.entry_epochs = self.hp_entries["Epochs:"]
         self.entry_dropout = self.hp_entries["Dropout:"]
-        self.entry_units = self.hp_entries["Units:"]
         self.entry_lr = self.hp_entries["LR:"]
         
         # Apply Validation to Training Inputs
@@ -344,9 +345,6 @@ class SignLanguageApp(ctk.CTk):
         
         self.entry_epochs.configure(validate="key", validatecommand=vcmd)
         self.entry_epochs.bind("<FocusOut>", lambda e: self._clamp_value(self.entry_epochs, 1, 1000, int))
-        
-        self.entry_units.configure(validate="key", validatecommand=vcmd)
-        self.entry_units.bind("<FocusOut>", lambda e: self._clamp_value(self.entry_units, 16, 512, int))
         
         self.entry_dropout.bind("<FocusOut>", lambda e: self._clamp_value(self.entry_dropout, 0.1, 0.9, float))
         self.entry_lr.bind("<FocusOut>", lambda e: self._clamp_value(self.entry_lr, 0.0001, 0.1, float))
@@ -419,7 +417,6 @@ class SignLanguageApp(ctk.CTk):
         state = "disabled" if self.auto_var.get() == 1 else "normal"
         self.entry_epochs.configure(state=state)
         self.entry_dropout.configure(state=state)
-        self.entry_units.configure(state=state)
         self.entry_lr.configure(state=state)
         # Disable Architecture selection if auto-tuning typically searches architecture
         # But here we implement tuning FOR the selected architecture or global. 
@@ -634,107 +631,26 @@ class SignLanguageApp(ctk.CTk):
         else:
             self.actions = np.array([])
 
-    def check_easter_egg(self, prediction):
-        clean_pred = str(prediction).strip().lower() # Normalize to lowercase
-        found_file = None
-        
-        # Case-insensitive search
-        if os.path.exists(self.media_path):
-            for f in os.listdir(self.media_path):
-                if f.lower().startswith(clean_pred + "."):
-                    # Check extension
-                    if f.lower().endswith(('.mp4', '.png', '.jpg', '.jpeg')):
-                        found_file = os.path.join(self.media_path, f)
-                        break
-        
-        if found_file:
-            self.log_box.insert("end", f"Easter Egg bulundu: {found_file}\n")
-            self.is_paused = True
-            
-            # Create popup
-            window = ctk.CTkToplevel(self)
-            window.title(f"Sürpriz: {prediction}")
-            window.geometry("600x400")
-            window.attributes("-topmost", True) # Force on top
-            
-            # Center logic
-            try:
-                x = self.winfo_x() + (self.winfo_width() // 2) - 300
-                y = self.winfo_y() + (self.winfo_height() // 2) - 200
-                window.geometry(f"+{x}+{y}")
-            except: pass
-            
-            # AUDIO LOGIC
-            base_name = os.path.splitext(found_file)[0]
-            audio_files = [base_name + '.mp3', base_name + '.wav']
-            audio_path = None
-            for af in audio_files:
-                if os.path.exists(af):
-                    audio_path = af
-                    break
-            
-            if audio_path:
+    def _update_video_ui(self):
+        with self.ui_lock:
+            if self.current_frame_pil:
+                # Create CTkImage on main thread
+                ctk_img = ctk.CTkImage(light_image=self.current_frame_pil, dark_image=self.current_frame_pil, size=(640, 480))
+                
                 try:
-                    pygame.mixer.music.load(audio_path)
-                    pygame.mixer.music.play()
-                except Exception as e:
-                    print(f"Audio error: {e}")
-            
-            video_label = ctk.CTkLabel(window, text="")
-            video_label.pack(fill="both", expand=True)
-            
-            is_video = found_file.lower().endswith('.mp4')
-            
-            if is_video:
-                cap = cv2.VideoCapture(found_file)
-                
-                def play_video():
-                    if not window.winfo_exists():
-                        cap.release()
-                        self.is_paused = False
-                        pygame.mixer.music.stop()
-                        return
-                        
-                    ret, frame = cap.read()
-                    if ret:
-                        frame = cv2.resize(frame, (600, 400))
-                        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                        img = Image.fromarray(frame)
-                        ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(600, 400))
-                        
-                        video_label.configure(image=ctk_img)
-                        video_label.image = ctk_img
-                        window.after(33, play_video)
-                    else:
-                        cap.release()
-                        window.destroy()
-                        self.is_paused = False
-                        pygame.mixer.music.stop()
-                
-                def on_close():
-                    cap.release()
-                    window.destroy()
-                    self.is_paused = False
-                    pygame.mixer.music.stop()
-                    
-                window.protocol("WM_DELETE_WINDOW", on_close)
-                play_video()
-                
-            else: # Image
-                pil_img = Image.open(found_file)
-                # Resize keeping aspect ratio maybe? For now fixed size
-                ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(600, 400))
-                video_label.configure(image=ctk_img)
-                
-                def close_after_delay():
-                    if window.winfo_exists():
-                        window.destroy()
-                    self.is_paused = False
-                    pygame.mixer.music.stop()
-                    
-                window.protocol("WM_DELETE_WINDOW", close_after_delay)
-                # Show for 3 seconds
-                window.after(3000, close_after_delay)
+                    current_tab = self.tabview.get()
+                    if current_tab == "Veri Toplama":
+                        self.video_label_col.configure(image=ctk_img)
+                        self.video_label_col.image = ctk_img
+                    elif current_tab == "Tahmin":
+                        self.video_label_pred.configure(image=ctk_img)
+                        self.video_label_pred.image = ctk_img
+                except Exception:
+                    pass
+        
+        # Schedule next update
+        if not self.stop_event.is_set():
+            self.after(30, self._update_video_ui)
 
     def _video_loop(self):
         # ... (Previous Video Loop Code with Slider Delay Logic) ...
@@ -746,13 +662,13 @@ class SignLanguageApp(ctk.CTk):
         res = None
         pred_label = "..."
         
+        print("DEBUG: _video_loop started")
         while not self.stop_event.is_set():
-            if self.is_paused:
-                time.sleep(0.1)
-                continue
+
 
             ret, frame = self.cap.read()
             if not ret:
+                print("DEBUG: Frame not received")
                 time.sleep(0.01)
                 continue
             
@@ -796,15 +712,10 @@ class SignLanguageApp(ctk.CTk):
                  # Convert for display and continue
                  image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
                  img_pil = Image.fromarray(image)
-                 ctk_img = ctk.CTkImage(light_image=img_pil, dark_image=img_pil, size=(640, 480))
                  
-                 current_tab = self.tabview.get()
-                 if current_tab == "Veri Toplama":
-                     self.video_label_col.configure(image=ctk_img)
-                     self.video_label_col.image = ctk_img
-                 elif current_tab == "Tahmin":
-                     self.video_label_pred.configure(image=ctk_img)
-                     self.video_label_pred.image = ctk_img
+                 with self.ui_lock:
+                     self.current_frame_pil = img_pil
+                 
                  continue
 
             # --- COLLECTION / TEST LOGIC ---
@@ -884,9 +795,6 @@ class SignLanguageApp(ctk.CTk):
                                 self.log_box.insert("end", f"Algılandı: {pred_label} ({res[pred_idx]:.2f})\n")
                                 self.log_box.see("end")
                                 self.last_pred_log = pred_label
-                            
-                            # Check for easter egg
-                            self.after(0, lambda p=pred_label: self.check_easter_egg(p))
                         else:
                             self.lbl_prediction.configure(text="Tahmin: ...")
                         
@@ -919,18 +827,12 @@ class SignLanguageApp(ctk.CTk):
             # Tkinter isn't thread safe but usually modifying image on label is accepted if careful.
             # Ideally use a queue, but direct config works for simple cases mostly.
             # Using try-except if widget destroyed
-            try:
-                current_tab = self.tabview.get()
-                if current_tab == "Veri Toplama":
-                    ctk_img = ctk.CTkImage(light_image=img_pil, dark_image=img_pil, size=(640, 480))
-                    self.video_label_col.configure(image=ctk_img)
-                    self.video_label_col.image = ctk_img
-                elif current_tab == "Tahmin":
-                    ctk_img = ctk.CTkImage(light_image=img_pil, dark_image=img_pil, size=(640, 480))
-                    self.video_label_pred.configure(image=ctk_img)
-                    self.video_label_pred.image = ctk_img
-            except Exception:
-                pass # App closed
+            # Use after() to schedule GUI updates safely from thread? 
+            # Tkinter isn't thread safe but usually modifying image on label is accepted if careful.
+            # Ideally use a queue, but direct config works for simple cases mostly.
+            # Using try-except if widget destroyed
+            with self.ui_lock:
+                self.current_frame_pil = img_pil
             
             time.sleep(0.01)
 
@@ -1153,15 +1055,16 @@ class SignLanguageApp(ctk.CTk):
             new_cap = cv2.VideoCapture(idx)
             if new_cap.isOpened():
                 self.cap = new_cap
-                self.log_box.insert("end", f"Kamera {idx} aktif.\n")
+                self.after(0, lambda: self.log_box.insert("end", f"Kamera {idx} aktif.\n"))
             else:
-                self.log_box.insert("end", f"Hata: Kamera {idx} açılamadı. 0'a dönülüyor.\n")
+                self.after(0, lambda: self.log_box.insert("end", f"Hata: Kamera {idx} açılamadı. 0'a dönülüyor.\n"))
                 new_cap = cv2.VideoCapture(0)
                 self.cap = new_cap
-                self.camera_var.set("Kamera 0")
+                self.after(0, lambda: self.camera_var.set("Kamera 0"))
                 
         threading.Thread(target=switch_task, daemon=True).start()
 
+    def _stop_training(self):
         if self.trainer:
             self.trainer.stop_training = True
             self.log_box.insert("end", "Durdurma isteği gönderildi... Model epoch sonunda duracak.\n")
@@ -1176,7 +1079,7 @@ class SignLanguageApp(ctk.CTk):
         try:
             epochs = int(self.entry_epochs.get())
             if not self.auto_var.get():
-                units = int(self.entry_units.get())
+                units = 64 # Fixed architecture
                 dropout = float(self.entry_dropout.get())
                 lr = float(self.entry_lr.get())
                 model_type = self.model_var.get()

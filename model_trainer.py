@@ -57,11 +57,23 @@ class ModelTrainer:
         
         if model_type == 'LSTM':
             model.add(Input(shape=input_shape))
-            model.add(LSTM(units, return_sequences=True, activation='relu'))
-            model.add(LSTM(units*2, return_sequences=True, activation='relu'))
-            model.add(Dropout(dropout))
-            model.add(LSTM(units, return_sequences=False, activation='relu'))
-            model.add(Dropout(dropout))
+            # Layer 1
+            model.add(LSTM(64, return_sequences=True, activation='tanh'))
+            model.add(Dropout(0.2))
+            # Layer 2
+            model.add(LSTM(128, return_sequences=True, activation='tanh'))
+            model.add(Dropout(0.2))
+            # Layer 3
+            model.add(LSTM(64, return_sequences=False, activation='tanh'))
+            model.add(Dropout(0.2))
+            
+            # Specific Dense layers for LSTM as requested
+            model.add(Dense(64, activation='relu'))
+            model.add(Dense(32, activation='relu'))
+            model.add(Dense(output_shape, activation='softmax'))
+            
+            model.compile(optimizer=Adam(learning_rate=0.0001), loss='categorical_crossentropy', metrics=['categorical_accuracy'])
+            return model
             
         elif model_type == 'GRU':
             model.add(Input(shape=input_shape))
