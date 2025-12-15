@@ -8,3 +8,4 @@ customtkinter
 Pillow
 keras-tuner
 seaborn
+pygame
