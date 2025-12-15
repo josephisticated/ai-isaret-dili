@@ -4,7 +4,7 @@ from sklearn.model_selection import train_test_split
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout, GRU, Conv1D, MaxPooling1D, Flatten, Bidirectional, Input
-from tensorflow.keras.callbacks import TensorBoard, EarlyStopping, ModelCheckpoint
+from tensorflow.keras.callbacks import TensorBoard, EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 from tensorflow.keras.optimizers import Adam
 import config
 import keras_tuner as kt
@@ -20,6 +20,7 @@ class ModelTrainer:
         self.model = None
         self.actions = np.array([])
         self.best_hps = None
+        self.stop_training = False
 
     def load_data(self, actions):
         self.actions = np.array(actions)
@@ -100,7 +101,7 @@ class ModelTrainer:
         
         return self.build_custom_model(model_type, units, dropout, lr, input_shape, output_shape)
 
-    def train(self, actions, model_type='LSTM', units=64, dropout=0.2, lr=0.001, epochs=None, auto_tune=False, callback_fn=None):
+    def train(self, actions, model_type='LSTM', units=64, dropout=0.2, lr=0.001, epochs=None, auto_tune=False, use_early_stopping=True, callback_fn=None):
         if epochs is None:
             epochs = config.EPOCHS
             
@@ -112,15 +113,33 @@ class ModelTrainer:
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.05)
         input_shape = (config.SEQUENCE_LENGTH, 1662)
         output_shape = y.shape[1]
+        
+        self.stop_training = False # Reset flag
 
         log_dir = os.path.join(config.LOG_PATH)
         tb_callback = TensorBoard(log_dir=log_dir)
-        early_stopping = EarlyStopping(monitor='val_categorical_accuracy', patience=10, restore_best_weights=True)
-        checkpoint = ModelCheckpoint(filepath=config.MODEL_PATH, monitor='val_categorical_accuracy', save_best_only=True)
+        checkpoint = ModelCheckpoint(filepath='best_model.keras', monitor='val_loss', save_best_only=True)
+        reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=0.00001, verbose=1)
         
-        callbacks = [tb_callback, early_stopping, checkpoint]
+        callbacks = [tb_callback, checkpoint, reduce_lr]
+        
+        if use_early_stopping:
+            early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+            callbacks.append(early_stopping)
+            
+        from tensorflow.keras.callbacks import Callback
+        
+        # Manual Stop Callback
+        class ManualStopCallback(Callback):
+            def __init__(self, trainer):
+                self.trainer = trainer
+            def on_epoch_end(self, epoch, logs=None):
+                if self.trainer.stop_training:
+                    self.model.stop_training = True
+                    
+        callbacks.append(ManualStopCallback(self))
+
         if callback_fn:
-            from tensorflow.keras.callbacks import Callback
             class CustomGUICallback(Callback):
                 def on_epoch_end(self, epoch, logs=None):
                     msg = f"Epoch {epoch+1}/{epochs} - loss: {logs['loss']:.4f} - acc: {logs['categorical_accuracy']:.4f}\n"
@@ -141,7 +160,7 @@ class ModelTrainer:
                 overwrite=True
             )
             
-            tuner.search(X_train, y_train, epochs=epochs, validation_data=(X_test, y_test), callbacks=[early_stopping])
+            tuner.search(X_train, y_train, epochs=epochs, validation_data=(X_test, y_test), callbacks=callbacks)
             self.best_hps = tuner.get_best_hyperparameters(num_trials=1)[0]
             
             best_model = tuner.get_best_models(num_models=1)[0]

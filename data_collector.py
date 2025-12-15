@@ -43,3 +43,53 @@ class DataCollector:
 
     def close(self):
         self.mp_helper.close()
+
+    def apply_noise(self, keypoints, noise_level=0.05):
+        noise = np.random.normal(0, noise_level, keypoints.shape)
+        return keypoints + noise
+
+    def augment_action(self, action_name, num_copies=1):
+        action_path = os.path.join(config.DATA_PATH, action_name)
+        if not os.path.exists(action_path):
+            return 0
+
+        # Get existing sequences
+        sequences = [d for d in os.listdir(action_path) if os.path.isdir(os.path.join(action_path, d))]
+        sequences = [int(s) for s in sequences if s.isdigit()]
+        
+        if not sequences:
+            return 0
+
+        start_idx = max(sequences) + 1
+        count = 0
+
+        for seq_idx in sequences:
+            source_seq_path = os.path.join(action_path, str(seq_idx))
+            
+            # Read all frames in sequence
+            frames = []
+            valid_seq = True
+            for frame_num in range(config.SEQUENCE_LENGTH):
+                npy_path = os.path.join(source_seq_path, f"{frame_num}.npy")
+                if os.path.exists(npy_path):
+                    frames.append(np.load(npy_path))
+                else:
+                    valid_seq = False
+                    break
+            
+            if not valid_seq:
+                continue
+
+            # Generate copies
+            for _ in range(num_copies):
+                target_seq_path = os.path.join(action_path, str(start_idx))
+                os.makedirs(target_seq_path, exist_ok=True)
+                
+                for frame_num, frame_data in enumerate(frames):
+                    augmented_data = self.apply_noise(frame_data)
+                    np.save(os.path.join(target_seq_path, f"{frame_num}.npy"), augmented_data)
+                
+                start_idx += 1
+                count += 1
+                
+        return count

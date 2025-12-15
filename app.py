@@ -14,6 +14,7 @@ import zipfile
 import sys
 from tkinter import filedialog, messagebox
 from sklearn.model_selection import train_test_split
+import pygame # For audio
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
@@ -128,6 +129,15 @@ class SignLanguageApp(ctk.CTk):
             os.makedirs(self.media_path)
         self.is_paused = False
         
+        # Audio Init
+        pygame.mixer.init()
+        
+        
+        # Countdown state
+        self.countdown_active = False
+        self.countdown_value = 0
+        self.countdown_start_time = 0
+        
         # Setup UI
         self._setup_ui()
         
@@ -185,6 +195,13 @@ class SignLanguageApp(ctk.CTk):
         self.btn_export_model = ctk.CTkButton(self.sidebar_frame, text="Modeli Kaydet", command=self._export_model)
         self.btn_export_model.grid(row=6, column=0, padx=20, pady=10)
 
+        # Camera Selection
+        ctk.CTkLabel(self.sidebar_frame, text="Kamera Seçimi", font=ctk.CTkFont(size=14, weight="bold")).grid(row=7, column=0, padx=20, pady=(20, 0), sticky="w")
+        self.camera_var = ctk.StringVar(value="Kamera 0")
+        self.camera_menu = ctk.CTkOptionMenu(self.sidebar_frame, values=["Kamera 0", "Kamera 1", "Kamera 2"], command=self._change_camera, variable=self.camera_var)
+        self.camera_menu.grid(row=8, column=0, padx=20, pady=10)
+
+
         # --- Main Area ---
         self.tabview = ctk.CTkTabview(self, width=250)
         self.tabview.grid(row=0, column=1, padx=20, pady=20, sticky="nsew")
@@ -239,10 +256,12 @@ class SignLanguageApp(ctk.CTk):
         self.label_delay.pack(pady=0)
         
         # Landmarks Toggle
-        # Landmarks Toggle
         self.switch_landmarks = ctk.CTkSwitch(controls, text="İskeleti Göster", command=self._toggle_landmarks)
         self.switch_landmarks.select()
         self.switch_landmarks.pack(side="right", padx=10)
+        
+        # Augmentation Button
+        ctk.CTkButton(controls, text="Veri Çoğalt (Gürültü)", fg_color="purple", width=120, command=self._open_augmentation_dialog).pack(side="right", padx=10)
 
         # Status Bar
         status_frame = ctk.CTkFrame(tab, height=50)
@@ -335,8 +354,14 @@ class SignLanguageApp(ctk.CTk):
         # Auto Toggle
         self.auto_var = ctk.IntVar(value=0)
         self.chk_auto = ctk.CTkCheckBox(tab, text="Otomatik Optimizasyon (Keras Tuner)", variable=self.auto_var, command=self._toggle_auto_settings)
-        self.chk_auto.pack(pady=10)
+        self.chk_auto.pack(pady=5)
         CTkToolTip(self.chk_auto, "En iyi parametreleri otomatik olarak bulur.")
+
+        # Early Stopping Toggle
+        self.early_stop_var = ctk.BooleanVar(value=True)
+        self.chk_early = ctk.CTkCheckBox(tab, text="Erken Durdurma (Early Stopping)", variable=self.early_stop_var)
+        self.chk_early.pack(pady=5)
+        CTkToolTip(self.chk_early, "Gelişme durursa eğitimi otomatik bitirir.")
 
         # Train Button & Metrics Button
         action_frame = ctk.CTkFrame(tab, fg_color="transparent")
@@ -459,6 +484,56 @@ class SignLanguageApp(ctk.CTk):
 
         threading.Thread(target=import_task, daemon=True).start()
 
+    def _open_augmentation_dialog(self):
+        self._update_actions_list()
+        if self.actions.size == 0:
+            messagebox.showwarning("Uyarı", "Veri bulunamadı. Önce veri toplayın veya içe aktarın.")
+            return
+
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Veri Çoğaltma (Augmentation)")
+        dialog.geometry("350x500")
+        
+        ctk.CTkLabel(dialog, text="Hangi kelimeler çoğaltılsın? (Gürültü Ekleme)", font=("Arial", 14, "bold")).pack(pady=10)
+        
+        # Checkboxes
+        scroll = ctk.CTkScrollableFrame(dialog, height=300)
+        scroll.pack(fill="both", expand=True, padx=10)
+        
+        vars = []
+        for action in self.actions:
+            var = ctk.BooleanVar(value=True)
+            chk = ctk.CTkCheckBox(scroll, text=action, variable=var)
+            chk.pack(anchor="w", pady=2)
+            vars.append((action, var))
+            
+        def perform_augmentation():
+            selected = [a for a, v in vars if v.get()]
+            if not selected:
+                return
+            
+            dialog.destroy()
+            
+            def augment_task():
+                self.btn_train.configure(state="disabled")
+                self.log_box.insert("end", "Veri çoğaltma işlemi başlatıldı...\n")
+                
+                total_new = 0
+                for action in selected:
+                    count = self.collector.augment_action(action, num_copies=1)
+                    total_new += count
+                    self.log_box.insert("end", f"{action}: {count} kopya eklendi.\n")
+                    self.log_box.see("end")
+                    
+                self.log_box.insert("end", f"Toplam {total_new} yeni veri oluşturuldu.\n")
+                self.after(0, lambda: messagebox.showinfo("Başarılı", f"{total_new} adet yeni veri üretildi."))
+                self.after(0, lambda: self.btn_train.configure(state="normal"))
+                self._update_actions_list()
+                
+            threading.Thread(target=augment_task, daemon=True).start()
+
+        ctk.CTkButton(dialog, text="Seçilenleri Çoğalt (x2)", command=perform_augmentation, fg_color="green").pack(pady=20)
+
     def _export_data_dialog(self):
         if not self.actions.size > 0:
             messagebox.showwarning("Uyarı", "Dışa aktarılacak veri yok.")
@@ -580,6 +655,7 @@ class SignLanguageApp(ctk.CTk):
             window = ctk.CTkToplevel(self)
             window.title(f"Sürpriz: {prediction}")
             window.geometry("600x400")
+            window.attributes("-topmost", True) # Force on top
             
             # Center logic
             try:
@@ -587,6 +663,22 @@ class SignLanguageApp(ctk.CTk):
                 y = self.winfo_y() + (self.winfo_height() // 2) - 200
                 window.geometry(f"+{x}+{y}")
             except: pass
+            
+            # AUDIO LOGIC
+            base_name = os.path.splitext(found_file)[0]
+            audio_files = [base_name + '.mp3', base_name + '.wav']
+            audio_path = None
+            for af in audio_files:
+                if os.path.exists(af):
+                    audio_path = af
+                    break
+            
+            if audio_path:
+                try:
+                    pygame.mixer.music.load(audio_path)
+                    pygame.mixer.music.play()
+                except Exception as e:
+                    print(f"Audio error: {e}")
             
             video_label = ctk.CTkLabel(window, text="")
             video_label.pack(fill="both", expand=True)
@@ -600,6 +692,7 @@ class SignLanguageApp(ctk.CTk):
                     if not window.winfo_exists():
                         cap.release()
                         self.is_paused = False
+                        pygame.mixer.music.stop()
                         return
                         
                     ret, frame = cap.read()
@@ -616,11 +709,13 @@ class SignLanguageApp(ctk.CTk):
                         cap.release()
                         window.destroy()
                         self.is_paused = False
+                        pygame.mixer.music.stop()
                 
                 def on_close():
                     cap.release()
                     window.destroy()
                     self.is_paused = False
+                    pygame.mixer.music.stop()
                     
                 window.protocol("WM_DELETE_WINDOW", on_close)
                 play_video()
@@ -635,6 +730,7 @@ class SignLanguageApp(ctk.CTk):
                     if window.winfo_exists():
                         window.destroy()
                     self.is_paused = False
+                    pygame.mixer.music.stop()
                     
                 window.protocol("WM_DELETE_WINDOW", close_after_delay)
                 # Show for 3 seconds
@@ -665,6 +761,52 @@ class SignLanguageApp(ctk.CTk):
             
             image, results = self.mp_helper.detect_mediapipe(frame)
             
+            # --- COUNTDOWN LOGIC ---
+            if self.countdown_active:
+                elapsed = time.time() - self.countdown_start_time
+                remaining = 3 - int(elapsed)
+                
+                if remaining > 0:
+                    # Draw countdown
+                    h, w, c = image.shape
+                    cv2.putText(image, str(remaining), (w//2 - 50, h//2 + 50), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 5, (0, 165, 255), 10, cv2.LINE_AA)
+                    self.status_label.configure(text=f"Başlıyor... {remaining}")
+                else:
+                    # Start collection!
+                    self.countdown_active = False
+                    self.is_collecting = True
+                    self.collection_frame_count = 0
+                    self.next_sequence_time = time.time() # Start immediately
+                    
+                    self.btn_collect.configure(text="BAŞLADI!", fg_color="green")
+                    self.status_light.configure(fg_color="green")
+                    self.status_label.configure(text=f"Veri Toplanıyor: {self.current_sequence_idx}")
+                    
+                    h, w, c = image.shape # Re-get dimensions in case of first frame after countdown
+                    cv2.putText(image, "BASLA!", (w//2 - 150, h//2 + 50), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 255, 0), 5, cv2.LINE_AA)
+            
+            # Draw landmarks (always)
+            if self.draw_landmarks:
+                self.mp_helper.draw_styled_landmarks(image, results)
+            
+            # Skip rest if countdown is running
+            if self.countdown_active:
+                 # Convert for display and continue
+                 image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                 img_pil = Image.fromarray(image)
+                 ctk_img = ctk.CTkImage(light_image=img_pil, dark_image=img_pil, size=(640, 480))
+                 
+                 current_tab = self.tabview.get()
+                 if current_tab == "Veri Toplama":
+                     self.video_label_col.configure(image=ctk_img)
+                     self.video_label_col.image = ctk_img
+                 elif current_tab == "Tahmin":
+                     self.video_label_pred.configure(image=ctk_img)
+                     self.video_label_pred.image = ctk_img
+                 continue
+
             # --- COLLECTION / TEST LOGIC ---
             if self.is_collecting or self.is_testing:
                 current_time = time.time()
@@ -845,6 +987,28 @@ class SignLanguageApp(ctk.CTk):
         if not action:
             self.status_label.configure(text="Hata: Önce bir kelime girin!")
             return
+            
+        # Initialize countdown
+        self.countdown_value = 3
+        self.countdown_start_time = time.time()
+        self.countdown_active = True
+        
+        # UI updates for countdown phase
+        self.btn_collect.configure(text="HAZIRLAN...", fg_color="orange")
+        self.btn_test.configure(state="disabled")
+        self.status_light.configure(fg_color="orange")
+        self.status_label.configure(text=f"Başlıyor... {self.countdown_value}")
+        
+        # Pre-calculation for collection
+        try:
+            target_seq = int(self.entry_count.get())
+        except:
+            target_seq = config.NO_SEQUENCES
+            
+        self.current_sequence_idx = self.collector.get_start_folder(action)
+        self.count_label.configure(text=f"{self.current_sequence_idx} / {target_seq}")
+        
+        # We don't set is_collecting = True yet; the video loop will do it after countdown
         
         self.current_action = action
         self.start_folder = self.collector.get_start_folder(action)
@@ -976,7 +1140,38 @@ class SignLanguageApp(ctk.CTk):
             cm_ctk = ctk.CTkImage(light_image=cm_img_pil, dark_image=cm_img_pil, size=(700, 500))
             ctk.CTkLabel(tabs.tab("Confusion Matrix"), text="", image=cm_ctk).pack(fill="both", expand=True)
 
+    def _change_camera(self, choice):
+        idx = int(choice.split(" ")[1])
+        self.log_box.insert("end", f"Kamera değiştiriliyor: {idx}...\n")
+        
+        def switch_task():
+            # Release old
+            if self.cap is not None:
+                self.cap.release()
+            
+            # Init new
+            new_cap = cv2.VideoCapture(idx)
+            if new_cap.isOpened():
+                self.cap = new_cap
+                self.log_box.insert("end", f"Kamera {idx} aktif.\n")
+            else:
+                self.log_box.insert("end", f"Hata: Kamera {idx} açılamadı. 0'a dönülüyor.\n")
+                new_cap = cv2.VideoCapture(0)
+                self.cap = new_cap
+                self.camera_var.set("Kamera 0")
+                
+        threading.Thread(target=switch_task, daemon=True).start()
+
+        if self.trainer:
+            self.trainer.stop_training = True
+            self.log_box.insert("end", "Durdurma isteği gönderildi... Model epoch sonunda duracak.\n")
+
     def _start_training(self):
+        # Check if already training (button text check is simple enough or use a flag)
+        if self.btn_train.cget("text") == "Eğitimi Durdur":
+            self._stop_training()
+            return
+
         # ... Params fetching ...
         try:
             epochs = int(self.entry_epochs.get())
@@ -989,11 +1184,14 @@ class SignLanguageApp(ctk.CTk):
             else:
                 units, dropout, lr, model_type = 0, 0, 0, ""
                 auto_tune = True
+                
+            use_early_stopping = self.early_stop_var.get()
+            
         except ValueError:
             self.log_box.insert("end", "Error: Invalid parameters.\n")
             return
         
-        self.btn_train.configure(state="disabled", text="Eğitiliyor...")
+        self.btn_train.configure(text="Eğitimi Durdur", fg_color="red")
         self.log_box.delete("0.0", "end")
         self.log_box.insert("0.0", "Eğitim başlatılıyor...\n")
         
@@ -1001,7 +1199,7 @@ class SignLanguageApp(ctk.CTk):
             self._update_actions_list()
             if len(self.actions) == 0:
                 self.log_box.insert("end", "Hata: Veri bulunamadı.\n")
-                self.btn_train.configure(state="normal", text="Eğitimi Başlat")
+                self.btn_train.configure(state="normal", text="Eğitimi Başlat", fg_color="#1f538d")
                 return
 
             def log_callback(msg):
@@ -1023,15 +1221,19 @@ class SignLanguageApp(ctk.CTk):
                     dropout=dropout,
                     lr=lr,
                     auto_tune=auto_tune,
+                    use_early_stopping=use_early_stopping,
                     callback_fn=log_callback
                 )
-                self.log_box.insert("end", "Eğitim Tamamlandı!\n")
-                self.unsaved_changes = True # Mark as unsaved
-                
-                # Evaluation
-                if X_test is not None:
-                     metrics = self.trainer.evaluate_model(X_test, y_test)
-                     self.after(0, lambda: self._show_detailed_metrics(metrics, history))
+                if history:
+                    self.log_box.insert("end", "Eğitim Tamamlandı!\n")
+                    self.unsaved_changes = True # Mark as unsaved
+                    
+                    # Evaluation
+                    if X_test is not None:
+                         metrics = self.trainer.evaluate_model(X_test, y_test)
+                         self.after(0, lambda: self._show_detailed_metrics(metrics, history))
+                else:
+                    self.log_box.insert("end", "Eğitim durduruldu veya başarısız oldu.\n")
                      
             except Exception as e:
                 self.log_box.insert("end", f"Hata: {str(e)}\n")
@@ -1041,7 +1243,7 @@ class SignLanguageApp(ctk.CTk):
                 sys.stdout = old_stdout
                 sys.stderr = old_stderr
             
-            self.btn_train.configure(state="normal", text="Eğitimi Başlat")
+            self.btn_train.configure(state="normal", text="Eğitimi Başlat", fg_color="#1f538d")
             self._load_model()
         
         threading.Thread(target=train_task, daemon=True).start()
