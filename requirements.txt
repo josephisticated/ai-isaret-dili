@@ -1,0 +1,10 @@
+opencv-python
+numpy
+matplotlib
+mediapipe
+tensorflow
+scikit-learn
+customtkinter
+Pillow
+keras-tuner
+seaborn
