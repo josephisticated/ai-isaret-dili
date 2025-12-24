@@ -2,7 +2,7 @@
 
 Bu proje, **MediaPipe Holistic** ve **LSTM/GRU/CNN** gibi derin öğrenme modellerini kullanarak gerçek zamanlı Türk İşaret Dili (TİD) tanıma ve eğitim sistemi sunar. Kullanıcı dostu arayüzü ile kendi veri setinizi oluşturabilir, modelinizi eğitebilir ve canlı testler yapabilirsiniz.
 
-![Uygulama Ekran Görüntüsü](placeholder_image.png) *<!-- Buraya ekran görüntüsü ekleyebilirsiniz -->*
+![Uygulama Ekran Görüntüsü](preview.png) *<!-- Buraya ekran görüntüsü ekleyebilirsiniz -->*
 
 ---
 
@@ -77,3 +77,4 @@ Hata bildirimleri ve özellik istekleri için lütfen "Issues" kısmını kullan
 
 **Geliştirici:** Yusuf
 **Lisans:** MIT
+
