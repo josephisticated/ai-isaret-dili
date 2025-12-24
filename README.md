@@ -21,8 +21,8 @@ Bu proje, **MediaPipe Holistic** ve **LSTM/GRU/CNN** gibi derin öğrenme modell
 
 1.  **Projeyi İndirin:**
     ```bash
-    git clone https://github.com/kullaniciadi/proje-adi.git
-    cd proje-adi
+    git clone https://github.com/josephisticated/ai-isaret-dili.git
+    cd ai-isaret-dili
     ```
 
 2.  **Gerekli Kütüphaneleri Yükleyin:**
@@ -77,4 +77,5 @@ Hata bildirimleri ve özellik istekleri için lütfen "Issues" kısmını kullan
 
 **Geliştirici:** Yusuf
 **Lisans:** MIT
+
 
