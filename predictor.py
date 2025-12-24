@@ -4,35 +4,74 @@ import config
 from utils import MediapipeHelper
 from model_trainer import ModelTrainer
 
-class RealTimeTranslator:
-    def __init__(self, actions):
+class SignLanguagePredictor:
+    def __init__(self, actions, threshold=0.5):
         self.actions = np.array(actions)
         self.mp_helper = MediapipeHelper()
         self.trainer = ModelTrainer()
+        self.threshold = threshold
         
         # Modeli yükle
         if not self.trainer.load_trained_model():
             raise Exception("Model yüklenemedi. Lütfen önce modeli eğitin.")
         
         self.model = self.trainer.model
-        self.colors = [(245,117,16), (117,245,16), (16,117,245)] * 10 # Repeat colors if many actions
+        self.colors = [(245,117,16), (117,245,16), (16,117,245)] * 10
+        
+        # Tahmin durumu
+        self.sequence = []
+        self.sentence = []
+        self.predictions = []
+
+    def predict(self, keypoints):
+        """
+        Tek bir kare (keypoints) alır ve tahmin sonucunu döndürür.
+        
+        Döndürür:
+            predicted_label (str veya None): Eğer bir tahmin yapıldıysa (eşik değeri aşıldıysa) etiket, aksi halde None.
+            confidence (float): Tahmin güven oranı.
+            current_sentence (list): Oluşturulan cümlenin kelime listesi.
+        """
+        self.sequence.append(keypoints)
+        self.sequence = self.sequence[-30:] # Son 30 kareyi tut
+        
+        predicted_label = None
+        confidence = 0.0
+        
+        if len(self.sequence) == 30:
+            res = self.model.predict(np.expand_dims(self.sequence, axis=0), verbose=0)[0]
+            best_idx = np.argmax(res)
+            confidence = res[best_idx]
+            
+            self.predictions.append(best_idx)
+            
+            # Son 10 tahmin kararlı mı?
+            if np.unique(self.predictions[-10:])[0] == best_idx:
+                if confidence > self.threshold:
+                    predicted_label = self.actions[best_idx]
+                    
+                    if len(self.sentence) > 0:
+                        if predicted_label != self.sentence[-1]:
+                            self.sentence.append(predicted_label)
+                    else:
+                        self.sentence.append(predicted_label)
+
+            if len(self.sentence) > 5:
+                self.sentence = self.sentence[-5:]
+                
+        return predicted_label, confidence, self.sentence
 
     def prob_viz(self, res, input_frame):
-        output_frame = input_frame.copy()
-        for num, prob in enumerate(res):
-            # Ensure we don't go out of bounds if actions > colors
-            color = self.colors[num % len(self.colors)]
-            
-            cv2.rectangle(output_frame, (0,60+num*40), (int(prob*100), 90+num*40), color, -1)
-            cv2.putText(output_frame, self.actions[num], (0, 85+num*40), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2, cv2.LINE_AA)
-        return output_frame
+        # Bu fonksiyon şimdilik sadece görselleştirme için, model çıktısını (res) dışarıdan alması gerekebilir
+        # ancak yeni yapıda 'res' predict içinde yerel.
+        # Görselleştirme isteniyorsa predict metodunun 'res' (olasılık dağılımı) döndürmesi daha iyi olabilir.
+        # Basitlik adına şimdilik run() içinde kullanacağız.
+        pass
 
     def run(self):
-        sequence = []
-        sentence = []
-        predictions = []
-        threshold = 0.5
-
+        """
+        Bağımsız çalıştırıldığında kamera açıp test etmeyi sağlar.
+        """
         cap = cv2.VideoCapture(0)
         
         while cap.isOpened():
@@ -43,32 +82,14 @@ class RealTimeTranslator:
             image, results = self.mp_helper.detect_mediapipe(frame)
             self.mp_helper.draw_styled_landmarks(image, results)
             
-            # Tahmin mantığı
             keypoints = self.mp_helper.extract_keypoints(results)
-            sequence.append(keypoints)
-            sequence = sequence[-30:]
             
-            if len(sequence) == 30:
-                res = self.model.predict(np.expand_dims(sequence, axis=0))[0]
-                predictions.append(np.argmax(res))
-                
-                if np.unique(predictions[-10:])[0] == np.argmax(res): 
-                    if res[np.argmax(res)] > threshold: 
-                        if len(sentence) > 0: 
-                            if self.actions[np.argmax(res)] != sentence[-1]:
-                                sentence.append(self.actions[np.argmax(res)])
-                        else:
-                            sentence.append(self.actions[np.argmax(res)])
-
-                if len(sentence) > 5: 
-                    sentence = sentence[-5:]
-
-                # Olasılıkları görselleştir
-                image = self.prob_viz(res, image)
+            # --- YENİ YAPI KULLANIMI ---
+            label, conf, sentence = self.predict(keypoints)
             
-            cv2.rectangle(image, (0,0), (640, 40), (245, 117, 16), -1)
-            cv2.putText(image, ' '.join(sentence), (3,30), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+            if label:
+                 cv2.putText(image, f"{label} ({conf:.2f})", (3, 440), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2, cv2.LINE_AA)
             
             cv2.imshow('OpenCV Feed', image)
 

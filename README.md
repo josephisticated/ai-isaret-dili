@@ -9,11 +9,12 @@ Bu proje, **MediaPipe Holistic** ve **LSTM/GRU/CNN** gibi derin öğrenme modell
 ## 🚀 Özellikler
 
 *   **⚡ Gerçek Zamanlı Tanıma:** Kameradan alınan görüntüleri anlık olarak işler ve çevirir.
-*   **🛠️ Kolay Veri Toplama:** Kendi işaretlerinizi kolayca kaydedin ve veri seti oluşturun.
-*   **🧠 Esnek Model Eğitimi:** LSTM, GRU, CNN ve Bi-LSTM gibi farklı mimarilerle modelinizi eğitin.
-*   **🧪 Test Modu:** Veri kaydetmeden sadece alıştırma yapmak için "Test Et" modu.
-*   **🎨 Modern Arayüz:** CustomTkinter ile geliştirilmiş şık ve karanlık mod destekli arayüz.
-*   **🇹🇷 Tamamen Türkçe:** Arayüz ve kod açıklamaları tamamen Türkçe'dir.
+*   **🛠️ Kolay Veri Toplama:** Kendi işaretlerinizi kolayca kaydedin. **"Test Et"** modu ile kayıt almadan pratik yapın.
+*   **💾 Veri ve Model Yönetimi:** Veri setlerinizi ve eğitilmiş modellerinizi tek tıkla dışa aktarın (Zip) veya yükleyin.
+*   **📊 Gelişmiş Grafikler:** Eğitim sonrası **F1-Score**, **Confusion Matrix** ve **Accuracy** grafiklerini inceleyin.
+*   **🧠 Optimize Edilmiş Modeller:** Kararlı performans için sabitlenmiş LSTM mimarisi ve otomatik optimizasyon seçenekleri.
+*   **🎨 Modern Arayüz:** CustomTkinter ile geliştirilmiş, tamamen Türkçe modern arayüz.
+*   **🏗️ Modüler Mimari:** OOP prensipleri ile refaktör edilmiş, sürdürülebilir kod yapısı.
 
 ---
 
@@ -41,31 +42,34 @@ Bu proje, **MediaPipe Holistic** ve **LSTM/GRU/CNN** gibi derin öğrenme modell
 ## 🎮 Kullanım
 
 ### 1. Veri Toplama (Data Collection)
-*   **Yeni Kelime:** Öğretmek istediğiniz kelimeyi girin (örn. "Merkaba").
-*   **Adet:** Kaç tane örnek video toplanacağını belirtin (varsayılan: 30).
-*   **TOPLAMAYI BAŞLAT:** Kayıt işlemini başlatır. Hazırlanmanız için geri sayım yapar.
+*   **Yeni Kelime:** Öğretmek istediğiniz kelimeyi girin (örn. "Merhaba").
+*   **Adet:** Kaç tane örnek video toplanacağını belirtin.
+*   **TOPLAMAYI BAŞLAT:** Geri sayım (3sn) sonrası kaydı başlatır. Ekranda **"BEKLE"** (Sarı) ve **"KAYIT"** (Kırmızı) komutlarını takip edin.
 *   **TEST ET:** Veri kaydetmeden toplama sürecini simüle eder.
+*   **İçe/Dışa Aktar:** Sol menüden veri klasörünüzü yedekleyebilir (Zip) veya yedeği geri yükleyebilirsiniz.
 
 ### 2. Eğitim (Training)
-*   **Model Mimarisi:** İhtiyacınıza uygun modeli seçin (LSTM genelde iyi bir başlangıçtır).
-*   **Epochs:** Eğitim süresi.
-*   **Eğitimi Başlat:** Topladığınız verilerle modeli eğitin.
-*   **Otomatik Optimizasyon:** En iyi parametreleri (Keras Tuner ile) otomatik bulmak için bu seçeneği kullanın.
+*   **Model Mimarisi:** LSTM, GRU, CNN veya Bi-LSTM seçeneklerinden birini seçin.
+*   **Ayarlar:** Epoch (Döngü), Dropout ve Learning Rate gibi değerleri değiştirebilirsiniz.
+*   **Eğitimi Başlat:** Topladığınız verilerle modeli eğitin. Sonuçlar (Loss/Accuracy) canlı olarak güncellenir.
+*   **Grafikler:** Eğitim bitince doğruluk, kayıp ve **Confusion Matrix** grafiklerini sekmelerde inceleyin.
 
 ### 3. Tahmin (Prediction)
 *   **TAHMİNİ BAŞLAT:** Eğitilen modeli yükler ve kameradan gerçek zamanlı çeviri yapar.
-*   Tahmin edilen kelime ve doğruluk oranı ekranda yeşil renkle gösterilir.
+*   **Sonuç:** Tahmin edilen kelime ve doğruluk oranı (%) yeşil renkle videonun üzerine yazılır.
+*   **Log:** Algılanan hareketler tarihçeli olarak alttaki kutuda listelenir.
 
 ---
 
 ## 📂 Proje Yapısı
 
-*   `app.py`: Ana uygulama ve kullanıcı arayüzü.
-*   `model_trainer.py`: Model oluşturma ve eğitim işlemleri.
-*   `data_collector.py`: Kamera ve Mediapipe işlemleri.
-*   `predictor.py`: Canlı tahmin mantığı.
-*   `utils.py`: MediaPipe çizim yardımcıları.
-*   `config.py`: Ayarlar ve sabitler.
+*   `app.py`: Ana uygulama ve kullanıcı arayüzü (GUI).
+*   `predictor.py`: Gerçek zamanlı tahmin mantığını içeren `SignLanguagePredictor` sınıfı.
+*   `model_trainer.py`: Derin öğrenme modellerinin eğitimi ve değerlendirilmesi.
+*   `data_collector.py`: Veri toplama ve veri artırma (augmentation) işlemleri.
+*   `utils.py`: MediaPipe Holistic entegrasyonu ve yardımcı fonksiyonlar.
+*   `config.py`: Proje genelindeki yollar ve parametre ayarları.
+*   `main.py`: Komut satırı (CLI) üzerinden kullanım seçeneği.
 
 ---
 
@@ -75,7 +79,5 @@ Hata bildirimleri ve özellik istekleri için lütfen "Issues" kısmını kullan
 
 ---
 
-**Geliştirici:** Yusuf
+**Geliştirici:** josephisticated
 **Lisans:** MIT
-
-

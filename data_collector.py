@@ -53,7 +53,7 @@ class DataCollector:
         if not os.path.exists(action_path):
             return 0
 
-        # Get existing sequences
+        # Mevcut sekansları al
         sequences = [d for d in os.listdir(action_path) if os.path.isdir(os.path.join(action_path, d))]
         sequences = [int(s) for s in sequences if s.isdigit()]
         
@@ -66,7 +66,7 @@ class DataCollector:
         for seq_idx in sequences:
             source_seq_path = os.path.join(action_path, str(seq_idx))
             
-            # Read all frames in sequence
+            # Sekanstaki tüm kareleri oku
             frames = []
             valid_seq = True
             for frame_num in range(config.SEQUENCE_LENGTH):
@@ -80,7 +80,7 @@ class DataCollector:
             if not valid_seq:
                 continue
 
-            # Generate copies
+            # Kopyalar oluştur
             for _ in range(num_copies):
                 target_seq_path = os.path.join(action_path, str(start_idx))
                 os.makedirs(target_seq_path, exist_ok=True)

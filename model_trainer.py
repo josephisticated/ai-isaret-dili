@@ -57,17 +57,17 @@ class ModelTrainer:
         
         if model_type == 'LSTM':
             model.add(Input(shape=input_shape))
-            # Layer 1
+            # Katman 1
             model.add(LSTM(64, return_sequences=True, activation='tanh'))
             model.add(Dropout(0.2))
-            # Layer 2
+            # Katman 2
             model.add(LSTM(128, return_sequences=True, activation='tanh'))
             model.add(Dropout(0.2))
-            # Layer 3
+            # Katman 3
             model.add(LSTM(64, return_sequences=False, activation='tanh'))
             model.add(Dropout(0.2))
             
-            # Specific Dense layers for LSTM as requested
+            # LSTM için istenildiği gibi özel Yoğun (Dense) katmanlar
             model.add(Dense(64, activation='relu'))
             model.add(Dense(32, activation='relu'))
             model.add(Dense(output_shape, activation='softmax'))
@@ -126,7 +126,7 @@ class ModelTrainer:
         input_shape = (config.SEQUENCE_LENGTH, 1662)
         output_shape = y.shape[1]
         
-        self.stop_training = False # Reset flag
+        self.stop_training = False # Bayrağı sıfırla
 
         log_dir = os.path.join(config.LOG_PATH)
         tb_callback = TensorBoard(log_dir=log_dir)
@@ -141,7 +141,7 @@ class ModelTrainer:
             
         from tensorflow.keras.callbacks import Callback
         
-        # Manual Stop Callback
+        # Manuel Durdurma Geri Araması
         class ManualStopCallback(Callback):
             def __init__(self, trainer):
                 self.trainer = trainer
@@ -199,19 +199,19 @@ class ModelTrainer:
         return history, X_test, y_test
 
     def evaluate_model(self, X_test, y_test):
-        # 1. Predictions
+        # 1. Tahminler
         yhat = self.model.predict(X_test)
         ytrue = np.argmax(y_test, axis=1).tolist()
         yhat = np.argmax(yhat, axis=1).tolist()
         
-        # 2. Metrics
+        # 2. Metrikler
         acc = accuracy_score(ytrue, yhat)
         f1 = f1_score(ytrue, yhat, average='weighted')
         
-        # 3. Confusion Matrix
+        # 3. Karmaşıklık Matrisi
         cm = confusion_matrix(ytrue, yhat)
         
-        # 4. Inference Time (Latency)
+        # 4. Çıkarım Süresi (Gecikme)
         start_time = time.time()
         _ = self.model.predict(np.expand_dims(X_test[0], axis=0), verbose=0)
         end_time = time.time()
@@ -245,7 +245,7 @@ class ModelTrainer:
         
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
         
-        # Loss
+        # Kayıp (Loss)
         ax1.plot(history.history['loss'], label='Eğitim Loss')
         ax1.plot(history.history['val_loss'], label='Doğrulama Loss')
         ax1.set_title('Loss Grafiği')
@@ -253,7 +253,7 @@ class ModelTrainer:
         ax1.set_ylabel('Loss')
         ax1.legend()
         
-        # Accuracy
+        # Doğruluk (Accuracy)
         ax2.plot(history.history['categorical_accuracy'], label='Eğitim Acc')
         ax2.plot(history.history['val_categorical_accuracy'], label='Doğrulama Acc')
         ax2.set_title('Doğruluk (Accuracy) Grafiği')

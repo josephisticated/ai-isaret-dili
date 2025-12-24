@@ -8,6 +8,7 @@ import config
 from utils import MediapipeHelper
 from data_collector import DataCollector
 from model_trainer import ModelTrainer
+from predictor import SignLanguagePredictor
 import os
 import shutil
 import zipfile
@@ -47,7 +48,7 @@ class CTkToolTip(ctk.CTkToplevel):
             self.widget.after_cancel(id)
 
     def show(self):
-        # Prevent showing if widget is no longer visible/mapped
+        # Widget artık görünür değilse göstermeyi engelle
         try:
             if not self.widget.winfo_exists() or not self.widget.winfo_viewable():
                 return
@@ -55,14 +56,14 @@ class CTkToolTip(ctk.CTkToplevel):
             return
 
         try:
-            # Generic positioning for any widget (Button, Frame, etc.)
+            # Herhangi bir widget için genel konumlandırma (Düğme, Çerçeve vb.)
             x = self.widget.winfo_rootx() + 20
             y = self.widget.winfo_rooty() + self.widget.winfo_height() + 10
             
             self.tooltip_window = ctk.CTkToplevel(self.widget)
             self.tooltip_window.wm_overrideredirect(True)
             self.tooltip_window.wm_geometry(f"+{x}+{y}")
-            # Ensure it stays on top
+            # En üstte kaldığından emin ol
             self.tooltip_window.attributes('-topmost', True)
             
             label = ctk.CTkLabel(self.tooltip_window, text=self.text, corner_radius=10, fg_color="gray20", text_color="white", padx=10, pady=5)
@@ -77,9 +78,9 @@ class CTkToolTip(ctk.CTkToplevel):
 
     @classmethod
     def hide_all(cls):
-        # With the delay logic, we rely on 'leave' events mostly, but this can still be useful 
-        # if we tracked instances constantly. For simplicity and stability, let's rely on event bindings.
-        # But to satisfy the existing call in app.py, we'll keep it as a pass or implement a basic forced cleanup if needed.
+        # Gecikme mantığıyla, çoğunlukla 'ayrılma' etkinliklerine güveniyoruz, ancak bu hala
+        # örnekleri sürekli izlersek yararlı olabilir. Basitlik ve kararlılık için etkinlik bağlamalarına güvenelim.
+        # Ancak app.py'deki mevcut çağrıyı karşılamak için bunu bir geçiş olarak tutacağız veya gerekirse temel bir zorla temizleme uygulayacağız.
         pass
 
 class IORedirector(object):
@@ -99,14 +100,14 @@ class SignLanguageApp(ctk.CTk):
         super().__init__()
 
         self.title("İşaret Dili AI Eğitmeni & Çeviricisi")
-        self.geometry("1300x850") # Expanded for better layout
+        self.geometry("1300x850") # Daha iyi düzen için genişletildi
 
-        # Logic Components
+        # Mantık Bileşenleri
         self.cap = cv2.VideoCapture(0)
         self.mp_helper = MediapipeHelper()
         self.collector = DataCollector()
         self.trainer = ModelTrainer()
-        self.model = None 
+        self.predictor = None 
         self.actions = []
         
         # Durum Değişkenleri
@@ -123,48 +124,47 @@ class SignLanguageApp(ctk.CTk):
         self.unsaved_changes = False
         
         
-        # Audio Init
+        # Ses Başlatma
         
         
         
         
-        # Thread Safety
+        # İş Parçacığı Güvenliği
         self.current_frame_pil = None
         self.ui_lock = threading.Lock()
         
-        # Countdown state
-        # Countdown state
+        # Geri sayım durumu
         self.countdown_active = False
         self.countdown_value = 0
         self.countdown_start_time = 0
         
-        # Setup UI
+        # Arayüzü Kur
         self._setup_ui()
         
-        # Load Actions
+        # Hareketleri Yükle
         self._update_actions_list()
         
-        # Start Video Loop
+        # Video Döngüsünü Başlat
         self.video_thread = threading.Thread(target=self._video_loop, daemon=True)
         self.video_thread.start()
         
-        # Start UI Update Loop (Main Thread)
+        # Arayüz Güncelleme Döngüsünü Başlat (Ana İş Parçacığı)
         self._update_video_ui()
         
-        # Bind click to reset focus, but ONLY if not clicking an entry/button
+        # Odağı sıfırlamak için tıklamayı bağla, ancak YALNIZCA bir girişe/düğmeye tıklanmıyorsa
         self.bind("<Button-1>", self._on_global_click)
 
     def _on_global_click(self, event):
-        # Check if the clicked widget is an input widget (Entry, Text, etc.)
+        # Tıklanan widget'ın bir giriş widget'ı olup olmadığını kontrol et (Giriş, Metin vb.)
         try:
             widget_class = event.widget.winfo_class()
-            # Standard Tkinter classes for input
+            # Giriş için standart Tkinter sınıfları
             if widget_class in ['Entry', 'Text', 'TEntry', 'TCombobox']:
                 return
         except Exception:
             pass
             
-        # Otherwise focus root to clear entry focus
+        # Aksi takdirde giriş odağı temizlemek için köke odaklan
         self.focus()
 
     def _setup_ui(self):
@@ -174,12 +174,12 @@ class SignLanguageApp(ctk.CTk):
         # --- Sidebar ---
         self.sidebar_frame = ctk.CTkFrame(self, width=250, corner_radius=0)
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
-        self.sidebar_frame.grid_rowconfigure(8, weight=1) # Spacer
+        self.sidebar_frame.grid_rowconfigure(8, weight=1) # Boşluk
 
         self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="SignAI Studio", font=ctk.CTkFont(size=24, weight="bold"))
         self.logo_label.grid(row=0, column=0, padx=20, pady=(40, 20))
 
-        # Data Management Section
+        # Veri Yönetimi Bölümü
         ctk.CTkLabel(self.sidebar_frame, text="Veri Yönetimi", font=ctk.CTkFont(size=14, weight="bold")).grid(row=1, column=0, padx=20, sticky="w")
         
         self.btn_import_data = ctk.CTkButton(self.sidebar_frame, text="Veri Klasörü Yükle", command=self._import_data_folder)
@@ -188,8 +188,7 @@ class SignLanguageApp(ctk.CTk):
         self.btn_export_data = ctk.CTkButton(self.sidebar_frame, text="Veri Dışa Aktar (Zip)", command=self._export_data_dialog)
         self.btn_export_data.grid(row=3, column=0, padx=20, pady=10)
 
-        # Model Management Section
-        # Model Management Section
+        # Model Yönetimi Bölümü
         ctk.CTkLabel(self.sidebar_frame, text="Model Yönetimi", font=ctk.CTkFont(size=14, weight="bold")).grid(row=4, column=0, padx=20, pady=(20, 0), sticky="w")
 
         self.btn_import_model = ctk.CTkButton(self.sidebar_frame, text="Model Yükle", command=self._import_model)
@@ -198,21 +197,21 @@ class SignLanguageApp(ctk.CTk):
         self.btn_export_model = ctk.CTkButton(self.sidebar_frame, text="Modeli Kaydet", command=self._export_model)
         self.btn_export_model.grid(row=6, column=0, padx=20, pady=10)
 
-        # Camera Selection
+        # Kamera Seçimi
         ctk.CTkLabel(self.sidebar_frame, text="Kamera Seçimi", font=ctk.CTkFont(size=14, weight="bold")).grid(row=7, column=0, padx=20, pady=(20, 0), sticky="w")
         self.camera_var = ctk.StringVar(value="Kamera 0")
         self.camera_menu = ctk.CTkOptionMenu(self.sidebar_frame, values=["Kamera 0", "Kamera 1", "Kamera 2"], command=self._change_camera, variable=self.camera_var)
         self.camera_menu.grid(row=8, column=0, padx=20, pady=10)
 
 
-        # --- Main Area ---
+        # --- Ana Alan ---
         self.tabview = ctk.CTkTabview(self, width=250)
         self.tabview.grid(row=0, column=1, padx=20, pady=20, sticky="nsew")
         self.tabview.add("Veri Toplama")
         self.tabview.add("Eğitim")
         self.tabview.add("Tahmin")
         
-        # Correctly setting the command for tab change
+        # Sekme değişimi için komutu doğru şekilde ayarlama
         self.tabview.configure(command=self._on_tab_change_command)
 
         self._setup_collection_tab()
@@ -220,7 +219,7 @@ class SignLanguageApp(ctk.CTk):
         self._setup_prediction_tab()
         
     def _on_tab_change_command(self):
-        # Wrapper to handle standard callback
+        # Standart geri aramayı işlemek için sarmalayıcı
         self._on_tab_change(self.tabview.get())
 
     def _setup_collection_tab(self):
@@ -228,18 +227,18 @@ class SignLanguageApp(ctk.CTk):
         tab.grid_columnconfigure(0, weight=1)
         tab.grid_rowconfigure(1, weight=1)
 
-        # Controls Frame
+        # Kontrol Çerçevesi
         controls = ctk.CTkFrame(tab)
         controls.grid(row=0, column=0, sticky="ew", padx=10, pady=10)
         
-        # Word Input
+        # Kelime Girişi
         self.entry_word = ctk.CTkEntry(controls, placeholder_text="Yeni Kelime Giriniz", width=200, height=35)
         self.entry_word.pack(side="left", padx=10, pady=10)
         CTkToolTip(self.entry_word, "Öğretmek istediğiniz kelimeyi buraya yazın.")
 
         vcmd = (self.register(self._validate_int_input), '%P')
         
-        # Count Input
+        # Adet Girişi
         self.entry_count = ctk.CTkEntry(controls, placeholder_text="Adet", width=60, height=35,
                                         validate="key", validatecommand=vcmd)
         self.entry_count.insert(0, str(config.NO_SEQUENCES))
@@ -247,7 +246,7 @@ class SignLanguageApp(ctk.CTk):
         self.entry_count.bind("<FocusOut>", lambda e: self._clamp_value(self.entry_count, 1, 30, int))
         CTkToolTip(self.entry_count, "Kaç adet video toplanacağı.")
         
-        # Slider
+        # Kaydırıcı
         slider_frame = ctk.CTkFrame(controls, fg_color="transparent")
         slider_frame.pack(side="left", padx=10)
         
@@ -258,15 +257,15 @@ class SignLanguageApp(ctk.CTk):
         self.label_delay = ctk.CTkLabel(slider_frame, text="Delay: 2s")
         self.label_delay.pack(pady=0)
         
-        # Landmarks Toggle
+        # İskelet Göster/Gizle
         self.switch_landmarks = ctk.CTkSwitch(controls, text="İskeleti Göster", command=self._toggle_landmarks)
         self.switch_landmarks.select()
         self.switch_landmarks.pack(side="right", padx=10)
         
-        # Augmentation Button
+        # Veri Çoğaltma Düğmesi
         ctk.CTkButton(controls, text="Veri Çoğalt (Gürültü)", fg_color="purple", width=120, command=self._open_augmentation_dialog).pack(side="right", padx=10)
 
-        # Status Bar
+        # Durum Çubuğu
         status_frame = ctk.CTkFrame(tab, height=50)
         status_frame.grid(row=2, column=0, sticky="ew", padx=10, pady=5)
         
@@ -279,22 +278,22 @@ class SignLanguageApp(ctk.CTk):
         self.count_label = ctk.CTkLabel(status_frame, text="0 / 30", font=("Arial", 16, "bold"))
         self.count_label.pack(side="right", padx=20)
 
-        # Video Area
+        # Video Alanı
         self.video_label_col = ctk.CTkLabel(tab, text="", fg_color="black", corner_radius=10)
         self.video_label_col.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
         
         self.video_label_col = ctk.CTkLabel(tab, text="", fg_color="black", corner_radius=10)
         self.video_label_col.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
         
-        # Action Buttons Frame
+        # Eylem Düğmeleri Çerçevesi
         btn_frame = ctk.CTkFrame(tab, fg_color="transparent")
         btn_frame.grid(row=3, column=0, sticky="ew", padx=10, pady=10)
         
-        # Test Button
+        # Test Düğmesi
         self.btn_test = ctk.CTkButton(btn_frame, text="TEST ET", fg_color="orange", height=50, width=150, font=("Arial", 16, "bold"), command=self._toggle_test)
         self.btn_test.pack(side="left", padx=(0, 10), fill="x", expand=True)
 
-        # Start Collection Button
+        # Toplamayı Başlat Düğmesi
         self.btn_collect = ctk.CTkButton(btn_frame, text="TOPLAMAYI BAŞLAT", fg_color="green", height=50, font=("Arial", 16, "bold"), command=self._toggle_collection)
         self.btn_collect.pack(side="left", fill="x", expand=True)
 
@@ -302,11 +301,11 @@ class SignLanguageApp(ctk.CTk):
         tab = self.tabview.tab("Eğitim")
         tab.grid_columnconfigure(0, weight=1)
         
-        # --- Settings ---
+        # --- Ayarlar ---
         settings_frame = ctk.CTkFrame(tab)
         settings_frame.pack(pady=10, padx=20, fill="x")
         
-        # Model Selection
+        # Model Seçimi
         ctk.CTkLabel(settings_frame, text="Model Mimarisi:").grid(row=0, column=0, padx=10, pady=10, sticky="w")
         self.model_var = ctk.StringVar(value="LSTM")
         models = ["LSTM", "GRU", "CNN", "Bi-LSTM"]
@@ -314,11 +313,11 @@ class SignLanguageApp(ctk.CTk):
             rb = ctk.CTkRadioButton(settings_frame, text=m, variable=self.model_var, value=m)
             rb.grid(row=0, column=i+1, padx=10, pady=10)
             
-        # Hyperparameters
+        # Hiperparametreler
         self.hp_frame = ctk.CTkFrame(tab)
         self.hp_frame.pack(pady=10, padx=20, fill="x")
         
-        # Labels and Entries with Tooltips
+        # İpuçları ile Etiketler ve Girişler
         params = [
             ("Epochs:", config.EPOCHS, "Eğitim döngüsü sayısı. Ne kadar süreceğini belirler."),
             ("Dropout:", "0.2", "Unutma oranı (0.1-0.5). Ezberlemeyi önler."),
@@ -340,7 +339,7 @@ class SignLanguageApp(ctk.CTk):
         self.entry_dropout = self.hp_entries["Dropout:"]
         self.entry_lr = self.hp_entries["LR:"]
         
-        # Apply Validation to Training Inputs
+        # Eğitim Girişlerine Doğrulama Uygula
         vcmd = (self.register(self._validate_int_input), '%P')
         
         self.entry_epochs.configure(validate="key", validatecommand=vcmd)
@@ -349,19 +348,19 @@ class SignLanguageApp(ctk.CTk):
         self.entry_dropout.bind("<FocusOut>", lambda e: self._clamp_value(self.entry_dropout, 0.1, 0.9, float))
         self.entry_lr.bind("<FocusOut>", lambda e: self._clamp_value(self.entry_lr, 0.0001, 0.1, float))
         
-        # Auto Toggle
+        # Otomatik Geçiş
         self.auto_var = ctk.IntVar(value=0)
         self.chk_auto = ctk.CTkCheckBox(tab, text="Otomatik Optimizasyon (Keras Tuner)", variable=self.auto_var, command=self._toggle_auto_settings)
         self.chk_auto.pack(pady=5)
         CTkToolTip(self.chk_auto, "En iyi parametreleri otomatik olarak bulur.")
 
-        # Early Stopping Toggle
+        # Erken Durdurma Geçişi
         self.early_stop_var = ctk.BooleanVar(value=True)
         self.chk_early = ctk.CTkCheckBox(tab, text="Erken Durdurma (Early Stopping)", variable=self.early_stop_var)
         self.chk_early.pack(pady=5)
         CTkToolTip(self.chk_early, "Gelişme durursa eğitimi otomatik bitirir.")
 
-        # Train Button & Metrics Button
+        # Eğitim Düğmesi & Metrikler Düğmesi
         action_frame = ctk.CTkFrame(tab, fg_color="transparent")
         action_frame.pack(pady=10, padx=20, fill="x")
         
@@ -371,7 +370,7 @@ class SignLanguageApp(ctk.CTk):
         self.btn_metrics = ctk.CTkButton(action_frame, text="Metrikleri Göster", fg_color="purple", height=50, font=("Arial", 16, "bold"), command=self._show_current_metrics)
         self.btn_metrics.pack(side="right", fill="x", expand=True)
         
-        # Logs
+        # Günlükler
         self.log_box = ctk.CTkTextbox(tab, height=300, font=("Consolas", 12))
         self.log_box.pack(pady=10, padx=20, fill="both", expand=True)
 
@@ -392,7 +391,7 @@ class SignLanguageApp(ctk.CTk):
         self.btn_toggle_pred = ctk.CTkButton(controls, text="TAHMİNİ BAŞLAT", fg_color="green", height=40, command=self._toggle_prediction)
         self.btn_toggle_pred.pack(side="right", padx=10, pady=10)
 
-    # --- UI Logic Methods ---
+    # --- Arayüz Mantık Yöntemleri ---
     def _update_delay_label(self, value):
         self.label_delay.configure(text=f"Gecikme: {int(value)}sn")
 
@@ -406,10 +405,10 @@ class SignLanguageApp(ctk.CTk):
             if val < min_val: val = min_val
             if val > max_val: val = max_val
         except ValueError:
-            # If invalid, revert to min_val or default logic
+            # Geçersizse, min_val değerine veya varsayılan mantığa geri dön
             val = min_val
             
-        # Update widget
+        # Widget'ı güncelle
         widget.delete(0, "end")
         widget.insert(0, str(val))
 
@@ -418,12 +417,12 @@ class SignLanguageApp(ctk.CTk):
         self.entry_epochs.configure(state=state)
         self.entry_dropout.configure(state=state)
         self.entry_lr.configure(state=state)
-        # Disable Architecture selection if auto-tuning typically searches architecture
-        # But here we implement tuning FOR the selected architecture or global. 
-        # Implementation Plan said "Takes selected model... and optimizes hyperparams".
-        # So we keep model selection enabled.
+        # Otomatik ayarlama genellikle mimariyi arıyorsa Mimari seçimini devre dışı bırak
+        # Ancak burada seçilen mimari İÇİN ayarlama yapıyoruz veya küresel.
+        # Uygulama Planı "Seçilen modeli alır... ve hiper parametreleri optimize eder" dedi.
+        # Bu yüzden model seçimini etkin tutuyoruz.
 
-    # --- Data & Model Management ---
+    # --- Veri ve Model Yönetimi ---
     
     def _import_data_folder(self):
         folder_selected = filedialog.askdirectory(title="İçe Aktarılacak Veri Klasörünü Seç")
@@ -434,7 +433,7 @@ class SignLanguageApp(ctk.CTk):
             count = 0
             try:
                 self.log_box.insert("end", "Veri içe aktarılıyor... Lütfen bekleyin.\n")
-                self.btn_train.configure(state="disabled") # Disable training during import
+                self.btn_train.configure(state="disabled") # İçe aktarma sırasında eğitimi devre dışı bırak
                 
                 for item in os.listdir(folder_selected):
                     source_item = os.path.join(folder_selected, item)
@@ -444,8 +443,8 @@ class SignLanguageApp(ctk.CTk):
                         if not os.path.exists(target_action_dir):
                             os.makedirs(target_action_dir)
                         
-                        # Find last index in target
-                        # Use try-except for permission errors on listdir
+                        # Hedefteki son indeksi bul
+                        # listdir üzerindeki izin hataları için try-except kullan
                         try:
                             numeric_files = [int(f) for f in os.listdir(target_action_dir) if f.isdigit()]
                         except:
@@ -453,7 +452,7 @@ class SignLanguageApp(ctk.CTk):
                             
                         start_idx = max(numeric_files) + 1 if numeric_files else 0
                         
-                        # Copy sequences
+                        # Sekansları kopyala
                         for sub_item in os.listdir(source_item):
                             source_seq_dir = os.path.join(source_item, sub_item)
                             if os.path.isdir(source_seq_dir):
@@ -463,14 +462,14 @@ class SignLanguageApp(ctk.CTk):
                                     start_idx += 1
                                     count += 1
                                 except FileExistsError:
-                                    # Skip if collision, or handle smart
+                                    # Çakışma varsa atla veya akıllıca hallet
                                     pass
                                 except Exception as e:
                                     print(f"Copy error: {e}")
 
                 self._update_actions_list()
                 self.log_box.insert("end", f"İçe aktarma tamamlandı: {count} yeni sekans.\n")
-                # Schedule GUI callbacks
+                # Arayüz geri aramalarını zamanla
                 self.after(0, lambda: messagebox.showinfo("Başarılı", f"{count} adet sekans başarıyla içe aktarıldı."))
                 
             except Exception as e:
@@ -493,7 +492,7 @@ class SignLanguageApp(ctk.CTk):
         
         ctk.CTkLabel(dialog, text="Hangi kelimeler çoğaltılsın? (Gürültü Ekleme)", font=("Arial", 14, "bold")).pack(pady=10)
         
-        # Checkboxes
+        # Onay Kutuları
         scroll = ctk.CTkScrollableFrame(dialog, height=300)
         scroll.pack(fill="both", expand=True, padx=10)
         
@@ -547,7 +546,7 @@ class SignLanguageApp(ctk.CTk):
         
         vars = []
         for action in self.actions:
-            var = ctk.BooleanVar(value=True) # Default select all
+            var = ctk.BooleanVar(value=True) # Varsayılan olarak tümünü seç
             chk = ctk.CTkCheckBox(scroll, text=action, variable=var)
             chk.pack(anchor="w", pady=2)
             vars.append((action, var))
@@ -589,7 +588,7 @@ class SignLanguageApp(ctk.CTk):
             messagebox.showinfo("Başarılı", "Model dışa aktarıldı.")
 
     def _import_model(self):
-        if self.unsaved_changes: # Ideally set this True on training finish
+        if self.unsaved_changes: # İdeal olarak eğitim bitiminde bunu True yap
              if not messagebox.askyesno("Kaydedilmemiş Değişiklikler", "Eğittiğiniz fakat kaydetmediğiniz bir model var. Devam ederseniz üzerine yazılacak. Devam edilsin mi?"):
                  return
                  
@@ -603,24 +602,25 @@ class SignLanguageApp(ctk.CTk):
                 messagebox.showerror("Hata", f"Model kopyalanamadı: {e}")
                 return
 
-             if self.trainer.load_trained_model():
-                 self.model = self.trainer.model
+             try:
+                 # Predictor sınıfını başlat (Modeli otomatik yükler)
+                 self.predictor = SignLanguagePredictor(self.actions)
                  self.unsaved_changes = False
                  messagebox.showinfo("Başarılı", "Model içe aktarıldı ve yüklendi.")
-             else:
-                 messagebox.showerror("Hata", "Model yüklenemedi.")
+             except Exception as e:
+                 messagebox.showerror("Hata", f"Model yüklenemedi: {e}")
 
-    # --- Core Loops & Logic (Same as before, merged) ---
+    # --- Çekirdek Döngüler ve Mantık (Öncekiyle aynı, birleştirildi) ---
     def _toggle_landmarks(self):
         self.draw_landmarks = self.switch_landmarks.get() == 1
 
     def _on_tab_change(self, tab_name):
-        # Force close any stuck tooltips
+        # Takılı kalan ipuçlarını zorla kapat
         CTkToolTip.hide_all()
         
         if tab_name != "Tahmin" and self.prediction_active:
             self._toggle_prediction()
-        # Refreshed actions on tab change potentially?
+        # Sekme değişikliğinde eylemler yenilendi mi?
         if tab_name == "Eğitim" or tab_name == "Tahmin":
             self._update_actions_list()
 
@@ -634,7 +634,7 @@ class SignLanguageApp(ctk.CTk):
     def _update_video_ui(self):
         with self.ui_lock:
             if self.current_frame_pil:
-                # Create CTkImage on main thread
+                # Ana iş parçacığında CTkImage oluştur
                 ctk_img = ctk.CTkImage(light_image=self.current_frame_pil, dark_image=self.current_frame_pil, size=(640, 480))
                 
                 try:
@@ -648,68 +648,59 @@ class SignLanguageApp(ctk.CTk):
                 except Exception:
                     pass
         
-        # Schedule next update
+        # Bir sonraki güncellemeyi zamanla
         if not self.stop_event.is_set():
             self.after(30, self._update_video_ui)
 
     def _video_loop(self):
-        # ... (Previous Video Loop Code with Slider Delay Logic) ...
-        # Copying exact logic from previous iteration to ensure no regression
-        sequence = []
-        sentence = []
-        predictions = []
-        threshold = 0.5
-        res = None
-        pred_label = "..."
-        
-        print("DEBUG: _video_loop started")
+        print("BİLGİ: Video döngüsü başlatıldı")
         while not self.stop_event.is_set():
 
 
             ret, frame = self.cap.read()
             if not ret:
-                print("DEBUG: Frame not received")
+                print("BİLGİ: Kare alınamadı")
                 time.sleep(0.01)
                 continue
             
-            # Flip frame for mirror effect
+            # Ayna etkisi için çerçeveyi çevir
             frame = cv2.flip(frame, 1)
             
             image, results = self.mp_helper.detect_mediapipe(frame)
             
-            # --- COUNTDOWN LOGIC ---
+            # --- GERİ SAYIM MANTIĞI ---
             if self.countdown_active:
                 elapsed = time.time() - self.countdown_start_time
                 remaining = 3 - int(elapsed)
                 
                 if remaining > 0:
-                    # Draw countdown
+                    # Geri sayımı çiz
                     h, w, c = image.shape
                     cv2.putText(image, str(remaining), (w//2 - 50, h//2 + 50), 
                                cv2.FONT_HERSHEY_SIMPLEX, 5, (0, 165, 255), 10, cv2.LINE_AA)
                     self.status_label.configure(text=f"Başlıyor... {remaining}")
                 else:
-                    # Start collection!
+                    # Toplamayı başlat!
                     self.countdown_active = False
                     self.is_collecting = True
                     self.collection_frame_count = 0
-                    self.next_sequence_time = time.time() # Start immediately
+                    self.next_sequence_time = time.time() # Hemen başlat
                     
                     self.btn_collect.configure(text="BAŞLADI!", fg_color="green")
                     self.status_light.configure(fg_color="green")
                     self.status_label.configure(text=f"Veri Toplanıyor: {self.current_sequence_idx}")
                     
-                    h, w, c = image.shape # Re-get dimensions in case of first frame after countdown
+                    h, w, c = image.shape # Geri sayımdan sonraki ilk kare olması durumunda boyutları yeniden al
                     cv2.putText(image, "BASLA!", (w//2 - 150, h//2 + 50), 
                                cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 255, 0), 5, cv2.LINE_AA)
             
-            # Draw landmarks (always)
+            # İşaret noktalarını çiz (her zaman)
             if self.draw_landmarks:
                 self.mp_helper.draw_styled_landmarks(image, results)
             
-            # Skip rest if countdown is running
+            # Geri sayım çalışıyorsa gerisini atla
             if self.countdown_active:
-                 # Convert for display and continue
+                 # Görüntüleme için dönüştür ve devam et
                  image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
                  img_pil = Image.fromarray(image)
                  
@@ -718,17 +709,17 @@ class SignLanguageApp(ctk.CTk):
                  
                  continue
 
-            # --- COLLECTION / TEST LOGIC ---
+            # --- TOPLAMA / TEST MANTIĞI ---
             if self.is_collecting or self.is_testing:
                 current_time = time.time()
                 if current_time < self.next_sequence_time:
-                    # Waiting period
+                    # Bekleme süresi
                     wait_time = int(self.next_sequence_time - current_time) + 1
                     cv2.putText(image, f"BEKLE: {wait_time}sn", (120,200), 
                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,255), 4, cv2.LINE_AA)
                     self.status_light.configure(fg_color="orange")
                 else:
-                    # Recording period
+                    # Kayıt süresi
                     self.status_light.configure(fg_color="red")
                     self.status_label.configure(text=f"Kaydediliyor {self.current_sequence_idx+1}" + (" (TEST)" if self.is_testing else ""))
                     
@@ -750,7 +741,7 @@ class SignLanguageApp(ctk.CTk):
                         self.current_sequence_idx += 1
                         
                         try:
-                            # Safely get target count, defaulting to config
+                            # Hedef sayısını güvenli bir şekilde al, yapılandırmaya varsayılan
                             target_count = int(self.entry_count.get())
                         except:
                             target_count = config.NO_SEQUENCES
@@ -761,82 +752,53 @@ class SignLanguageApp(ctk.CTk):
                         
                         if self.current_sequence_idx >= target_count:
                             if self.is_testing:
-                                self._stop_test() # Just stop, no save msg
+                                self._stop_test() # Sadece dur, kaydetme mesajı yok
                             else:
                                 self.is_collecting = False
                                 self._finish_collection()
 
-            # --- PREDICTION LOGIC ---
-            elif self.prediction_active and self.model and len(self.actions) > 0:
+            # --- TAHMİN MANTIĞI ---
+            elif self.prediction_active and self.predictor and len(self.actions) > 0:
                 keypoints = self.mp_helper.extract_keypoints(results)
-                sequence.append(keypoints)
-                sequence = sequence[-30:]
                 
-                if len(sequence) == 30:
-                    try:
-                        res = self.model.predict(np.expand_dims(sequence, axis=0), verbose=0)[0]
-                        pred_idx = np.argmax(res)
+                try:
+                    label, conf, _ = self.predictor.predict(keypoints)
+                    
+                    if label:
+                        conf_text = f"Tahmin: {label} ({conf:.2f})"
+                        self.lbl_prediction.configure(text=conf_text)
                         
-                        if pred_idx < len(self.actions):
-                            pred_label = self.actions[pred_idx]
-                        else:
-                            pred_label = f"IndexError({pred_idx})"
-                        
-                        # Debug logic - print to log box occasionally?
-                        # print(f"Pred: {pred_label} Conf: {res[pred_idx]:.2f}") 
-                        
-                        if res[pred_idx] > threshold:
-                            conf_text = f"Tahmin: {pred_label} ({res[pred_idx]:.2f})"
-                            self.lbl_prediction.configure(text=conf_text)
-                            
-                            # Log detection to log box for user visibility ("Type out what it detects")
-                            # We throttle this to avoid spamming the log box (e.g. only if changed)
-                            if not hasattr(self, 'last_pred_log') or self.last_pred_log != pred_label:
-                                self.log_box.insert("end", f"Algılandı: {pred_label} ({res[pred_idx]:.2f})\n")
-                                self.log_box.see("end")
-                                self.last_pred_log = pred_label
-                        else:
-                            self.lbl_prediction.configure(text="Tahmin: ...")
-                        
-                    except Exception as e:
-                        print(f"Prediction error: {e}")
-                        self.log_box.insert("end", f"Prediction logic error: {e}\n")
+                        # Kullanıcı görünürlüğü için algılamayı günlük kutusuna kaydet
+                        if not hasattr(self, 'last_pred_log') or self.last_pred_log != label:
+                            self.log_box.insert("end", f"Algılandı: {label} ({conf:.2f})\n")
+                            self.log_box.see("end")
+                            self.last_pred_log = label
+                    else:
+                        self.lbl_prediction.configure(text="Tahmin: ...")
+            
+                except Exception as e:
+                    print(f"Prediction error: {e}")
+                    self.log_box.insert("end", f"Prediction logic error: {e}\n")
 
+            # İşaret noktalarını çiz
             if self.draw_landmarks:
                 self.mp_helper.draw_styled_landmarks(image, results)
             
-            # DEBUG OVERLAY
-            if self.prediction_active:
-                debug_color = (0, 255, 0) if len(self.actions) > 0 and len(sequence) == 30 else (0, 0, 255)
-                debug_text = f"Durum: {len(sequence)}/30 | Siniflar: {len(self.actions)}"
-                cv2.putText(image, debug_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, debug_color, 2)
-                
-                if res is not None and len(self.actions) > 0:
-                     pred_max = np.max(res)
-                     debug_conf_text = f"Top: {pred_label} ({pred_max:.2f})"
-                     cv2.putText(image, debug_conf_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
-                
-                if len(self.actions) == 0:
-                     cv2.putText(image, "HATA: Model siniflari (Actions) yuklenemedi!", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-                     cv2.putText(image, "Lutfen 'Egitim' sekmesine gidip verileri kontrol edin.", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 1)
+            # Basit Durum Bilgisi
+            if self.prediction_active and len(self.actions) == 0:
+                cv2.putText(image, "Hareket/Sinif Yok!", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                cv2.putText(image, "HATA: Model siniflari (Actions) yuklenemedi!", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                cv2.putText(image, "Lutfen 'Egitim' sekmesine gidip verileri kontrol edin.", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 1)
             
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             img_pil = Image.fromarray(image)
             
-            # Use after() to schedule GUI updates safely from thread? 
-            # Tkinter isn't thread safe but usually modifying image on label is accepted if careful.
-            # Ideally use a queue, but direct config works for simple cases mostly.
-            # Using try-except if widget destroyed
-            # Use after() to schedule GUI updates safely from thread? 
-            # Tkinter isn't thread safe but usually modifying image on label is accepted if careful.
-            # Ideally use a queue, but direct config works for simple cases mostly.
-            # Using try-except if widget destroyed
             with self.ui_lock:
                 self.current_frame_pil = img_pil
             
             time.sleep(0.01)
 
-    # --- Button Logic ---
+    # --- Düğme Mantığı ---
     def _toggle_test(self):
         if self.is_testing:
             self._stop_test()
@@ -844,13 +806,11 @@ class SignLanguageApp(ctk.CTk):
             self._start_test()
 
     def _start_test(self):
-        if self.is_collecting: return # Don't test if collecting
+        if self.is_collecting: return # Toplama yapılıyorsa test etme
         
         self.is_testing = True
         self.btn_test.configure(text="TESTİ DURDUR", fg_color="red")
-        self.btn_collect.configure(state="disabled") # Disable collect button
-        
-        # Init counters for simulation
+        # Simülasyon için sayaçları sıfırla
         self.current_sequence_idx = 0
         self.collection_frame_count = 0
         self.next_sequence_time = time.time()
@@ -871,7 +831,7 @@ class SignLanguageApp(ctk.CTk):
 
 
     def _toggle_collection(self):
-        if self.is_testing: return # Don't collect if testing
+        if self.is_testing: return # Test ediliyorsa veri toplama
         if self.is_collecting:
             self._stop_collection()
         else:
@@ -880,7 +840,7 @@ class SignLanguageApp(ctk.CTk):
     def _stop_collection(self):
         self.is_collecting = False
         self.btn_collect.configure(text="TOPLAMAYI BAŞLAT", fg_color="green")
-        self.btn_test.configure(state="normal") # Enable test button
+        self.btn_test.configure(state="normal") # Test düğmesini etkinleştir
         self.status_light.configure(fg_color="gray")
         self.status_label.configure(text=f"Durduruldu. ({self.current_sequence_idx})")
 
@@ -890,18 +850,18 @@ class SignLanguageApp(ctk.CTk):
             self.status_label.configure(text="Hata: Önce bir kelime girin!")
             return
             
-        # Initialize countdown
+        # Geri sayımı başlat
         self.countdown_value = 3
         self.countdown_start_time = time.time()
         self.countdown_active = True
         
-        # UI updates for countdown phase
+        # Geri sayım aşaması için arayüz güncellemeleri
         self.btn_collect.configure(text="HAZIRLAN...", fg_color="orange")
         self.btn_test.configure(state="disabled")
         self.status_light.configure(fg_color="orange")
         self.status_label.configure(text=f"Başlıyor... {self.countdown_value}")
         
-        # Pre-calculation for collection
+        # Veri toplama için ön hesaplamalar
         try:
             target_seq = int(self.entry_count.get())
         except:
@@ -910,7 +870,7 @@ class SignLanguageApp(ctk.CTk):
         self.current_sequence_idx = self.collector.get_start_folder(action)
         self.count_label.configure(text=f"{self.current_sequence_idx} / {target_seq}")
         
-        # We don't set is_collecting = True yet; the video loop will do it after countdown
+        # is_collecting henüz True yapılmadı; video döngüsü geri sayımdan sonra yapacak
         
         self.current_action = action
         self.start_folder = self.collector.get_start_folder(action)
@@ -926,7 +886,7 @@ class SignLanguageApp(ctk.CTk):
 
         self.is_collecting = True
         self.btn_collect.configure(text="TOPLAMAYI DURDUR", fg_color="red")
-        self.btn_test.configure(state="disabled") # Disable test button
+        self.btn_test.configure(state="disabled") # Test düğmesini devre dışı bırak
     
     def _finish_collection(self):
         self.status_light.configure(fg_color="green")
@@ -934,7 +894,7 @@ class SignLanguageApp(ctk.CTk):
         self.btn_collect.configure(text="TOPLAMAYI BAŞLAT", fg_color="green")
         self._update_actions_list()
         
-        # Only show warning if we have a loaded model that might be outdated now
+        # Sadece güncel olmayabilecek yüklü bir modelimiz varsa uyarı göster
         if self.show_train_warning and self.model is not None:
             self.after(500, self._show_retrain_warning)
 
@@ -944,7 +904,7 @@ class SignLanguageApp(ctk.CTk):
         dialog.geometry("400x250")
         dialog.transient(self) 
         
-        # Center logic
+        # Ortalama mantığı
         try:
             x = self.winfo_x() + (self.winfo_width() // 2) - 200
             y = self.winfo_y() + (self.winfo_height() // 2) - 125
@@ -970,8 +930,8 @@ class SignLanguageApp(ctk.CTk):
         btn.pack(pady=10)
 
     def _show_current_metrics(self):
-        # Allow auto-loading if model exists but not loaded
         if not self.model or not self.trainer.model:
+            # Model varsa ancak yüklenmemişse otomatik yüklemeye izin ver
             if self.trainer.load_trained_model():
                 self.model = self.trainer.model
                 self.log_box.insert("end", "Model diskten yüklendi.\n")
@@ -1022,7 +982,7 @@ class SignLanguageApp(ctk.CTk):
         m_text = f"Doğruluk: {metrics['accuracy']:.4f}  |  F1-Score: {metrics['f1_score']:.4f}  |  Gecikme: {metrics['latency_ms']:.2f} ms  |  FPS: {metrics['fps']:.2f}"
         ctk.CTkLabel(m_frame, text=m_text, font=("Arial", 16, "bold")).pack(pady=10)
         
-        # Tabs for Graphs
+        # Grafikler için Sekmeler
         tabs = ctk.CTkTabview(win)
         tabs.pack(fill="both", expand=True, padx=10, pady=10)
         tabs.add("Grafikler")
@@ -1070,16 +1030,16 @@ class SignLanguageApp(ctk.CTk):
             self.log_box.insert("end", "Durdurma isteği gönderildi... Model epoch sonunda duracak.\n")
 
     def _start_training(self):
-        # Check if already training (button text check is simple enough or use a flag)
+        # Eğitimin devam edip etmediğini kontrol et (düğme metni kontrolü yeterli)
         if self.btn_train.cget("text") == "Eğitimi Durdur":
             self._stop_training()
             return
 
-        # ... Params fetching ...
+        # Parametreleri al
         try:
             epochs = int(self.entry_epochs.get())
             if not self.auto_var.get():
-                units = 64 # Fixed architecture
+                units = 64 # Sabit mimari
                 dropout = float(self.entry_dropout.get())
                 lr = float(self.entry_lr.get())
                 model_type = self.model_var.get()
@@ -1109,7 +1069,7 @@ class SignLanguageApp(ctk.CTk):
                 self.log_box.insert("end", msg)
                 self.log_box.see("end")
             
-            # Redirect stdout/stderr
+            # Çıktıları yönlendir
             old_stdout = sys.stdout
             old_stderr = sys.stderr
             sys.stdout = IORedirector(self.log_box)
@@ -1129,9 +1089,9 @@ class SignLanguageApp(ctk.CTk):
                 )
                 if history:
                     self.log_box.insert("end", "Eğitim Tamamlandı!\n")
-                    self.unsaved_changes = True # Mark as unsaved
+                    self.unsaved_changes = True # Kaydedilmemiş olarak işaretle
                     
-                    # Evaluation
+                    # Değerlendirme
                     if X_test is not None:
                          metrics = self.trainer.evaluate_model(X_test, y_test)
                          self.after(0, lambda: self._show_detailed_metrics(metrics, history))

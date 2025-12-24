@@ -4,10 +4,10 @@ import numpy as np
 import config
 from data_collector import DataCollector
 from model_trainer import ModelTrainer
-from predictor import RealTimeTranslator
+from predictor import SignLanguagePredictor
 
 def get_actions():
-    # Helper to get current actions from data folder
+    # Veri klasöründen mevcut hareketleri almak için yardımcı
     if not os.path.exists(config.DATA_PATH):
         return []
     return [d for d in os.listdir(config.DATA_PATH) if os.path.isdir(os.path.join(config.DATA_PATH, d))]
@@ -48,7 +48,7 @@ def main():
                 continue
             
             try:
-                translator = RealTimeTranslator(actions)
+                translator = SignLanguagePredictor(actions)
                 print("Çevirici başlatılıyor... Çıkmak için 'q' basın.")
                 translator.run()
             except Exception as e:
