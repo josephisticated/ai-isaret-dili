@@ -19,10 +19,10 @@ class DataCollector:
         image, results = self.mp_helper.detect_mediapipe(frame)
         self.mp_helper.draw_styled_landmarks(image, results)
         
-        # Anahtar noktaları dışa aktar
+        # Anahtar noktalari disa aktar
         keypoints = self.mp_helper.extract_keypoints(results)
         
-        # Yol sağlanmışsa kaydet
+        # Yol saglanmissa kaydet
         if save_path:
             npy_path = os.path.join(save_path, str(frame_num))
             np.save(npy_path, keypoints)
@@ -53,7 +53,7 @@ class DataCollector:
         if not os.path.exists(action_path):
             return 0
 
-        # Mevcut sekansları al
+        # Mevcut sekanslari al
         sequences = [d for d in os.listdir(action_path) if os.path.isdir(os.path.join(action_path, d))]
         sequences = [int(s) for s in sequences if s.isdigit()]
         
@@ -66,7 +66,7 @@ class DataCollector:
         for seq_idx in sequences:
             source_seq_path = os.path.join(action_path, str(seq_idx))
             
-            # Sekanstaki tüm kareleri oku
+            # Sekanstaki tum kareleri oku
             frames = []
             valid_seq = True
             for frame_num in range(config.SEQUENCE_LENGTH):
@@ -80,7 +80,7 @@ class DataCollector:
             if not valid_seq:
                 continue
 
-            # Kopyalar oluştur
+            # Kopyalar olustur
             for _ in range(num_copies):
                 target_seq_path = os.path.join(action_path, str(start_idx))
                 os.makedirs(target_seq_path, exist_ok=True)

@@ -23,7 +23,7 @@ class MediapipeHelper:
         return image, results
 
     def draw_styled_landmarks(self, image, results):
-        # Yüz bağlantılarını çiz (Performans için kapatıldı/Sadeleştirildi)
+        # Yuz baglantilarini ciz (Performans icin kapatildi/Sadelestirildi)
         # if results.face_landmarks:
         #     self.mp_drawing.draw_landmarks(
         #         image, 
@@ -33,7 +33,7 @@ class MediapipeHelper:
         #         self.mp_drawing.DrawingSpec(color=(80,256,121), thickness=1, circle_radius=1)
         #     )
         
-        # Sadece ana hatları çizmek isterseniz şunları açabilirsiniz (Daha hızlı):
+        # Sadece ana hatlari cizmek isterseniz sunlari acabilirsiniz (Daha hizli):
         if results.face_landmarks:
              self.mp_drawing.draw_landmarks(
                  image, 
@@ -43,7 +43,7 @@ class MediapipeHelper:
                  self.mp_drawing.DrawingSpec(color=(80,256,121), thickness=1, circle_radius=1)
              )
         
-        # Vücut bağlantılarını çiz
+        # Vucut baglantilarini ciz
         if results.pose_landmarks:
             self.mp_drawing.draw_landmarks(
                 image, 
@@ -53,7 +53,7 @@ class MediapipeHelper:
                 self.mp_drawing.DrawingSpec(color=(80,44,121), thickness=2, circle_radius=2)
             )
         
-        # Sol el bağlantılarını çiz
+        # Sol el baglantilarini ciz
         if results.left_hand_landmarks:
             self.mp_drawing.draw_landmarks(
                 image, 
@@ -63,7 +63,7 @@ class MediapipeHelper:
                 self.mp_drawing.DrawingSpec(color=(121,44,250), thickness=2, circle_radius=2)
             )
         
-        # Sağ el bağlantılarını çiz
+        # Sag el baglantilarini ciz
         if results.right_hand_landmarks:
             self.mp_drawing.draw_landmarks(
                 image, 

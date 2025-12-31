@@ -67,7 +67,7 @@ class ModelTrainer:
             model.add(LSTM(64, return_sequences=False, activation='tanh'))
             model.add(Dropout(0.2))
             
-            # LSTM için istenildiği gibi özel Yoğun (Dense) katmanlar
+            # LSTM icin istenildigi gibi ozel Yogun (Dense) katmanlar
             model.add(Dense(64, activation='relu'))
             model.add(Dense(32, activation='relu'))
             model.add(Dense(output_shape, activation='softmax'))
@@ -126,7 +126,7 @@ class ModelTrainer:
         input_shape = (config.SEQUENCE_LENGTH, 1662)
         output_shape = y.shape[1]
         
-        self.stop_training = False # Bayrağı sıfırla
+        self.stop_training = False # Bayragi sifirla
 
         log_dir = os.path.join(config.LOG_PATH)
         tb_callback = TensorBoard(log_dir=log_dir)
@@ -141,7 +141,7 @@ class ModelTrainer:
             
         from tensorflow.keras.callbacks import Callback
         
-        # Manuel Durdurma Geri Araması
+        # Manuel Durdurma Geri Aramasi
         class ManualStopCallback(Callback):
             def __init__(self, trainer):
                 self.trainer = trainer
@@ -208,10 +208,10 @@ class ModelTrainer:
         acc = accuracy_score(ytrue, yhat)
         f1 = f1_score(ytrue, yhat, average='weighted')
         
-        # 3. Karmaşıklık Matrisi
+        # 3. Karmasiklik Matrisi
         cm = confusion_matrix(ytrue, yhat)
         
-        # 4. Çıkarım Süresi (Gecikme)
+        # 4. Cikarim Suresi (Gecikme)
         start_time = time.time()
         _ = self.model.predict(np.expand_dims(X_test[0], axis=0), verbose=0)
         end_time = time.time()
@@ -245,7 +245,7 @@ class ModelTrainer:
         
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
         
-        # Kayıp (Loss)
+        # Kayip (Loss)
         ax1.plot(history.history['loss'], label='Eğitim Loss')
         ax1.plot(history.history['val_loss'], label='Doğrulama Loss')
         ax1.set_title('Loss Grafiği')
@@ -253,7 +253,7 @@ class ModelTrainer:
         ax1.set_ylabel('Loss')
         ax1.legend()
         
-        # Doğruluk (Accuracy)
+        # Dogruluk (Accuracy)
         ax2.plot(history.history['categorical_accuracy'], label='Eğitim Acc')
         ax2.plot(history.history['val_categorical_accuracy'], label='Doğrulama Acc')
         ax2.set_title('Doğruluk (Accuracy) Grafiği')

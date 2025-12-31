@@ -7,7 +7,7 @@ from model_trainer import ModelTrainer
 from predictor import SignLanguagePredictor
 
 def get_actions():
-    # Veri klasöründen mevcut hareketleri almak için yardımcı
+    # Veri klasorunden mevcut hareketleri almak icin yardimci
     if not os.path.exists(config.DATA_PATH):
         return []
     return [d for d in os.listdir(config.DATA_PATH) if os.path.isdir(os.path.join(config.DATA_PATH, d))]

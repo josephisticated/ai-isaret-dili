@@ -11,7 +11,7 @@ class SignLanguagePredictor:
         self.trainer = ModelTrainer()
         self.threshold = threshold
         
-        # Modeli yükle
+        # Modeli yukle
         if not self.trainer.load_trained_model():
             raise Exception("Model yüklenemedi. Lütfen önce modeli eğitin.")
         
@@ -45,7 +45,7 @@ class SignLanguagePredictor:
             
             self.predictions.append(best_idx)
             
-            # Son 10 tahmin kararlı mı?
+            # Son 10 tahmin kararli mi?
             if np.unique(self.predictions[-10:])[0] == best_idx:
                 if confidence > self.threshold:
                     predicted_label = self.actions[best_idx]
@@ -62,10 +62,10 @@ class SignLanguagePredictor:
         return predicted_label, confidence, self.sentence
 
     def prob_viz(self, res, input_frame):
-        # Bu fonksiyon şimdilik sadece görselleştirme için, model çıktısını (res) dışarıdan alması gerekebilir
-        # ancak yeni yapıda 'res' predict içinde yerel.
-        # Görselleştirme isteniyorsa predict metodunun 'res' (olasılık dağılımı) döndürmesi daha iyi olabilir.
-        # Basitlik adına şimdilik run() içinde kullanacağız.
+        # Bu fonksiyon simdilik sadece gorsellestirme icin, model ciktisini (res) disaridan almasi gerekebilir
+        # ancak yeni yapida 'res' predict icinde yerel.
+        # Gorsellestirme isteniyorsa predict metodunun 'res' (olasilik dagilimi) dondurmesi daha iyi olabilir.
+        # Basitlik adina simdilik run() icinde kullanacagiz.
         pass
 
     def run(self):
@@ -84,7 +84,7 @@ class SignLanguagePredictor:
             
             keypoints = self.mp_helper.extract_keypoints(results)
             
-            # --- YENİ YAPI KULLANIMI ---
+            # --- YENI YAPI KULLANIMI ---
             label, conf, sentence = self.predict(keypoints)
             
             if label:

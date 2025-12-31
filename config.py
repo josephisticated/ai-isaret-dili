@@ -1,7 +1,7 @@
 import os
 import numpy as np
 
-# Veri Yolları
+# Veri Yollari
 DATA_PATH = os.path.join('MP_Data')
 LOG_PATH = os.path.join('Logs')
 MODEL_PATH = 'action.keras'
